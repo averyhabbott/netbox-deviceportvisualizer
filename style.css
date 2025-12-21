@@ -1,0 +1,67 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 20px;
+}
+
+#controls {
+    margin-bottom: 20px;
+}
+
+#deviceContainer {
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+#frontContainer, #rearContainer {
+    border: 1px solid #ccc;
+    margin-bottom: 20px;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+#rearContainer {
+    background-color: rgba(255, 200, 200, 0.3); /* Soft red background for rear view */
+}
+
+#frontSvg, #rearSvg {
+    background-color: #f9f9f9;
+    max-width: 100%;
+    height: auto;
+}
+
+.interface {
+    cursor: move;
+    fill: #ddd;
+    stroke: #000;
+    stroke-width: 1;
+}
+
+.interface:hover {
+    fill: #bbb;
+}
+
+.interface.highlighted {
+    fill: #00ab00;
+    stroke: #006300;
+    stroke-width: 2;
+}
+
+.text {
+    font-size: 12px;
+    text-anchor: middle;
+    dominant-baseline: middle;
+    pointer-events: none;
+}
+
+.device-body {
+    fill: #888;
+    stroke: #000;
+    stroke-width: 2;
+}
+
+.dimensions-text {
+    font-size: 10px;
+    fill: #000;
+    font-weight: bold;
+}

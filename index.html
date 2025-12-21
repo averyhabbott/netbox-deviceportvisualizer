@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetBox Device Port Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>NetBox Device Port Visualizer</h1>
+    <div id="controls">
+        <label for="deviceTypeSelect">Select Device Type:</label>
+        <select id="deviceTypeSelect"></select>
+        <button id="loadButton">Load Device Type</button>
+        <button id="saveButton">Save Layout</button>
+        <button id="resetButton">Reset Layout</button>
+        <br>
+        <label for="highlightSelect">Highlight Interface:</label>
+        <select id="highlightSelect">
+            <option value="">Select an interface...</option>
+        </select>
+        <button id="highlightButton">Highlight</button>
+        <button id="clearHighlightButton">Clear Highlight</button>
+        <br>
+        <button id="toggleImagesButton">Show Device Images</button>
+    </div>
+    <div id="deviceContainer">
+        <div id="frontContainer">
+            <h3>Front View</h3>
+            <svg id="frontSvg" width="800" height="300"></svg>
+        </div>
+        <div id="rearContainer">
+            <h3>Rear View</h3>
+            <svg id="rearSvg" width="800" height="300"></svg>
+        </div>
+    </div>
+    <div id="instructions">
+        <p>Drag interfaces to position them on the device.</p>
+    </div>
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

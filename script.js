@@ -11,6 +11,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('resetButton').addEventListener('click', resetLayout);
     document.getElementById('highlightButton').addEventListener('click', highlightInterface);
     document.getElementById('clearHighlightButton').addEventListener('click', clearHighlight);
+    document.getElementById('refreshInterfacesButton').addEventListener('click', async () => {
+        // Only refresh if there is a local model
+        if (currentDeviceType && Object.keys(positions).length > 0) {
+            await refreshInterfaces();
+        } else {
+            await loadDevice();
+        }
+    });
     document.getElementById('toggleImagesButton').addEventListener('click', toggleDeviceImages);
 
     // Handle window resize to rescale the device
@@ -118,16 +126,15 @@ async function loadDevice() {
 }
 
 async function loadDeviceAndHighlightInterface(deviceSlug, interfaceName) {
-    try {
-        // First, load all device types to find the one with matching slug
-        const headers = getHeaders();
-        const deviceTypesResponse = await fetch(`${netboxUrl}/dcim/device-types/`, { headers });
-        const deviceTypesData = await deviceTypesResponse.json();
-        
+    try {        
         // Find the device type with matching slug
-        const deviceType = deviceTypesData.results.find(dt => dt.slug === deviceSlug);
-        if (!deviceType) {
-            console.error(`Device type with slug '${deviceSlug}' not found`);
+        const headers = getHeaders();
+        try {
+            const deviceTypeResponse = await fetch(`${netboxUrl}/dcim/device-types/?slug=${deviceSlug}`, { headers });
+            const deviceTypeData = await deviceTypeResponse.json();
+            deviceType = deviceTypeData.results[0];
+        } catch (error) {
+            console.error(`Error fetching device type with slug '${deviceSlug}':`, error);
             return;
         }
         
@@ -165,33 +172,49 @@ async function loadInterfacesFromNetBox(deviceTypeId, headers) {
     const consolePortsResponse = await fetch(`${netboxUrl}/dcim/console-port-templates/?device_type_id=${deviceTypeId}`, { headers });
     const consolePortsData = await consolePortsResponse.json();
     interfaces.push(...consolePortsData.results);
+}
 
-    // Deprecated:
-    // Load saved positions from localStorage as fallback
-    // positions = JSON.parse(localStorage.getItem(`positions_${deviceTypeId}`)) || {};
-    
-    // Convert any old absolute positions to relative positions
-    // if (Object.keys(positions).length > 0) {
-    //     // Check if positions appear to be absolute (values > 1 suggest pixels)
-    //     const samplePos = Object.values(positions)[0];
-    //     if (samplePos && (samplePos.x > 1 || samplePos.y > 1)) {
-    //         // Convert absolute positions to relative (assuming they were for a ~760px wide device)
-    //         const assumedWidth = 760; // approximate previous default width
-    //         const assumedHeight = 70; // approximate 1U height
-    //         for (const id in positions) {
-    //             const rawX = (positions[id].x / assumedWidth);
-    //             const rawY = (positions[id].y / assumedHeight);
-    //             // Snap to grid during conversion
-    //             positions[id] = {
-    //                 x: Math.round(rawX * 100) / 100, // 1% increments
-    //                 y: Math.round(rawY * 20) / 20, // 5% increments
-    //                 side: 'front' // Default to front for backward compatibility
-    //             };
-    //         }
-    //         // Save the converted positions
-    //         // localStorage.setItem(`positions_${deviceTypeId}`, JSON.stringify(positions));
-    //     }
-    // }
+// Refresh Interfaces logic
+async function refreshInterfaces() {
+    if (!currentDeviceType) return;
+    const deviceTypeId = currentDeviceType.id;
+    const headers = getHeaders();
+
+    // Try to load existing model
+    let modelExists = false;
+    let savedPositions = {};
+    try {
+        const modelResponse = await fetch(`api/load-model/${currentDeviceType.slug}`);
+        if (modelResponse.ok) {
+            const modelData = await modelResponse.json();
+            savedPositions = modelData.positions || {};
+            modelExists = true;
+        }
+    } catch (e) {
+        // Model does not exist or error
+        modelExists = false;
+    }
+
+    // Always reload interfaces from NetBox
+    await loadInterfacesFromNetBox(deviceTypeId, headers);
+
+    if (modelExists) {
+        // Preserve placement of any existing interfaces
+        // Only keep positions for interfaces that still exist
+        const newIds = new Set(interfaces.map(i => i.id));
+        positions = {};
+        for (const [id, pos] of Object.entries(savedPositions)) {
+            if (newIds.has(Number(id)) || newIds.has(id)) {
+                positions[id] = pos;
+            }
+        }
+    } else {
+        // No model: reset all positions
+        positions = {};
+    }
+
+    drawDevice();
+    populateHighlightDropdown();
 }
 
 function drawDevice() {
@@ -290,8 +313,8 @@ function getDefaultPosition(iface, svgWidth, svgHeight) {
     const rawRelativeX = margin / svgWidth + (col / cols) * (availableWidth / svgWidth);
     const rawRelativeY = margin / svgHeight + (row / rows) * (availableHeight / svgHeight);
     
-    // Snap to grid: X snaps to 1% increments, Y snaps to 5% increments
-    const relativeX = Math.round(rawRelativeX * 100) / 100; // 1% increments
+    // Snap to grid: X snaps to 0.25% increments, Y snaps to 5% increments
+    const relativeX = Math.round(rawRelativeX * 400) / 400; // 0.25% increments
     const relativeY = Math.round(rawRelativeY * 20) / 20; // 5% increments
 
     return {x: relativeX, y: relativeY, side: 'front'}; // Default to front
@@ -311,15 +334,15 @@ function drawInterface(svg, iface, x, y, pixelsPerInch) {
     // SFP Types:
     const sfpTypes = ['10gbase-x-sfpp', '25gbase-x-sfp28', '64gfc-sfpp', '64gfc-sfpdd', '1000base-x-sfp', '10gbase-x-xfp'];
     const qsfpTypes = ['100gbase-x-qsfp28', 'cisco-stackwise'];
-    const copperTypes = ['1000base-t', '1000base-tx', '10gbase-t', '100base-tx'];
+    const copperTypes = ['1000base-t', '1000base-tx', '10gbase-t', '100base-tx', 'rj-45'];
     if (sfpTypes.includes(type)) {
         // SFP cage: 0.53" × 0.33"
-        width = 0.53 * pixelsPerInch;
-        height = 0.33 * pixelsPerInch;
+        width = 0.56 * pixelsPerInch;
+        height = 0.35 * pixelsPerInch;
     } else if (qsfpTypes.includes(type)) {
         // QSFP cage: 0.722" × 0.33"
-        width = 0.722 * pixelsPerInch;
-        height = 0.33 * pixelsPerInch;
+        width = 0.74 * pixelsPerInch;
+        height = 0.35 * pixelsPerInch;
     } else if (copperTypes.includes(type)) {
         // RJ-45 approximate: 0.6" × 0.4"
         width = 0.6 * pixelsPerInch;
@@ -412,9 +435,9 @@ function drag(event) {
     const relativeX = Math.max(0, Math.min(1, newX / svgWidth));
     const relativeY = Math.max(0, Math.min(1, newY / svgHeight));
     
-    // Snap to grid: X snaps to 1% increments, Y snaps to 5% increments
-    const snappedX = Math.round(relativeX * 100) / 100; // 1% increments (1/0.01 = 100)
-    const snappedY = Math.round(relativeY * 20) / 20; // 5% increments (1/0.05 = 20)
+    // Snap to grid: X snaps to 0.25% increments, Y snaps to 5% increments
+    const snappedX = Math.round(relativeX * 400) / 400; // 0.25% increments
+    const snappedY = Math.round(relativeY * 20) / 20; // 5% increments
     
     // Convert back to absolute pixels
     const snappedAbsX = snappedX * svgWidth;
@@ -448,7 +471,7 @@ function endDrag() {
     const relativeY = absoluteY / svgHeight;
     
     // Apply the same snapping as in drag function
-    const snappedX = Math.round(relativeX * 100) / 100; // 1% increments
+    const snappedX = Math.round(relativeX * 400) / 400; // 0.25% increments
     const snappedY = Math.round(relativeY * 20) / 20; // 5% increments
     
     // Determine side based on SVG container
@@ -557,8 +580,6 @@ function populateHighlightDropdown() {
         select.appendChild(option);
     });
 }
-
-let modelsDirectoryHandle = null;
 
 async function saveLayout() {
     if (!currentDeviceType || !positions || Object.keys(positions).length === 0) {

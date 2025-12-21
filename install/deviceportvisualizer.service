@@ -1,0 +1,22 @@
+[Unit]
+Description=DevicePortVisualizer WSGI Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+User=deviceportvisualizer
+Group=deviceportvisualizer
+PIDFile=/var/tmp/deviceportvisualizer.pid
+WorkingDirectory=/opt/deviceportvisualizer
+
+# Remove the following line if using uWSGI instead of Gunicorn
+ExecStart=/opt/deviceportvisualizer/venv/bin/gunicorn --pid /var/tmp/deviceportvisualizer.pid --pythonpath /opt/deviceportvisualizer --config /opt/deviceportvisualizer/gunicorn.py wsgi:application
+
+Restart=on-failure
+RestartSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

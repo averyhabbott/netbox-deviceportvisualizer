@@ -8,6 +8,9 @@ import os
 from urllib.parse import unquote
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+# Define the TCP port number to listen on
+PORT = 8002
+
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 # Apply proxy fix for reverse proxy support
@@ -95,4 +98,4 @@ def add_cors_headers(response):
 
 if __name__ == '__main__':
     os.makedirs(MODELS_DIR, exist_ok=True)
-    app.run(host='127.0.0.1', port=8002, debug=True)
+    app.run(host='127.0.0.1', port=PORT, debug=True)

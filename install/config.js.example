@@ -1,0 +1,2 @@
+const netboxUrl = 'https://127.0.0.1/api'; // Adjust to your NetBox instance API root
+const apiKey = ''; // This is an API key created in NetBox

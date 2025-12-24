@@ -1,8 +1,23 @@
 #!/bin/bash
 
+echo "Checking to see if config.js exists..."
+if [ ! -f "../config.js" ]; then
+  echo "config.js does not exist. Creating a new one..."
+  cp config.js.example ../config.js
+else
+  echo "config.js already exists. Skipping creation."
+fi
+
+echo "Checking to see if models directory exists..."
+if [ ! -d "../models" ]; then
+  echo "models directory does not exist. Creating a new one..."
+  mkdir ../models
+else
+  echo "models directory already exists. Skipping creation."
+fi
+
 # This script will invoke Python with the value of the PYTHON environment
-# variable (if set), or fall back to "python3". Note that NetBox v4.0+ requires
-# Python 3.10 or later.
+# variable (if set), or fall back to "python3".
 
 VIRTUALENV="$(pwd -P)/../venv"
 PYTHON="${PYTHON:-python3}"

@@ -9,10 +9,10 @@ Type=simple
 User=deviceportvisualizer
 Group=deviceportvisualizer
 PIDFile=/var/tmp/deviceportvisualizer.pid
-WorkingDirectory=/opt/deviceportvisualizer
+WorkingDirectory=/opt/netbox-deviceportvisualizer
 
 # Remove the following line if using uWSGI instead of Gunicorn
-ExecStart=/opt/deviceportvisualizer/venv/bin/gunicorn --pid /var/tmp/deviceportvisualizer.pid --pythonpath /opt/deviceportvisualizer --config /opt/deviceportvisualizer/gunicorn.py wsgi:application
+ExecStart=/opt/netbox-deviceportvisualizer/venv/bin/gunicorn --pid /var/tmp/deviceportvisualizer.pid --pythonpath /opt/netbox-deviceportvisualizer --config /opt/netbox-deviceportvisualizer/gunicorn.py wsgi:application
 
 Restart=on-failure
 RestartSec=30

@@ -1,19 +1,19 @@
 # Install steps
 
-1. Create a folder with the version number appended
+1. Clone the Git repo and check out latest version
 
 ```bash
-NEWVER=0.0.1
-sudo mkdir /opt/deviceportvisualizer-$NEWVER
-sudo cp --recursive * /opt/deviceportvisualizer-$NEWVER/
-sudo ln -sfn /opt/deviceportvisualizer-$NEWVER/ /opt/deviceportvisualizer
+cd /opt
+sudo git clone https://github.com/averyhabbott/netbox-deviceportvisualizer.git
+cd netbox-deviceportvisualizer
+sudo git checkout vX.Y.Z
 ```
 
 2. Create the deviceportvisualizer user
 
 ```bash
 sudo adduser --system --group deviceportvisualizer
-sudo chown --recursive deviceportvisualizer /opt/deviceportvisualizer/models
+sudo chown --recursive deviceportvisualizer /opt/netbox-deviceportvisualizer/models
 ```
 
 3. Set the netboxUrl and apiKey variables in config.js
@@ -23,21 +23,23 @@ sudo chown --recursive deviceportvisualizer /opt/deviceportvisualizer/models
 4. Run the install script
 
 ```bash
-cd /opt/deviceportvisualizer/install
-sudo chmod 700 install.sh
+cd /opt/netbox-deviceportvisualizer/install
+sudo chmod 744 install.sh
 sudo ./install.sh
 ```
 
 5. Install the deviceportvisualizer service
 
 ```bash
-sudo cp -v /opt/deviceportvisualizer/install/*.service /etc/systemd/system/
+sudo cp -v /opt/netbox-deviceportvisualizer/install/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now deviceportvisualizer
 systemctl status deviceportvisualizer.service
 ```
 
 6. Edit the NetBox NGINX file to include a new proxy
+
+- TCP Port is defined in server.py and can be adjusted to avoid conflicts
 
 ```bash
     location /deviceportvisualizer/ {

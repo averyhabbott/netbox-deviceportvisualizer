@@ -9,7 +9,9 @@
 <body>
     <h1>NetBox Device Port Visualizer</h1>
     <div id="controls">
-        <label for="deviceTypeSelect">Select Device Type:</label>
+        <label for="deviceMfrSelect">Device Manufacturer:</label>
+        <select id="deviceMfrSelect"></select>
+        <label for="deviceTypeSelect">Device Type:</label>
         <select id="deviceTypeSelect"></select>
         <button id="loadButton">Load Device Type</button>
         <button id="saveButton">Save Layout</button>
@@ -20,8 +22,7 @@
         <select id="highlightSelect">
             <option value="">Select an interface...</option>
         </select>
-        <button id="highlightButton">Highlight</button>
-        <button id="clearHighlightButton">Clear Highlight</button>
+        <button id="highlightButton">Toggle Highlight</button>
         <br>
         <button id="toggleImagesButton">Show Device Images</button>
     </div>

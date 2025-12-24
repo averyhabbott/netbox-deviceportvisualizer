@@ -5,18 +5,22 @@ let draggedElement = null;
 let offset = {x: 0, y: 0};
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await loadManufacturers();
     await loadDeviceTypes();
-    document.getElementById('loadButton').addEventListener('click', loadDevice);
+    document.getElementById('deviceMfrSelect').addEventListener('change', async () => {
+        const manufacturer = document.getElementById('deviceMfrSelect').value;
+        await loadDeviceTypes(manufacturer);
+    });
+    document.getElementById('loadButton').addEventListener('click', loadDeviceByButton);
     document.getElementById('saveButton').addEventListener('click', saveLayout);
     document.getElementById('resetButton').addEventListener('click', resetLayout);
-    document.getElementById('highlightButton').addEventListener('click', highlightInterface);
-    document.getElementById('clearHighlightButton').addEventListener('click', clearHighlight);
+    document.getElementById('highlightButton').addEventListener('click', interfaceHighlightToggle);
     document.getElementById('refreshInterfacesButton').addEventListener('click', async () => {
-        // Only refresh if there is a local model
+        // Only "refresh" if there is a local model, otherwise just reload the device
         if (currentDeviceType && Object.keys(positions).length > 0) {
             await refreshInterfaces();
         } else {
-            await loadDevice();
+            loadDevice();
         }
     });
     document.getElementById('toggleImagesButton').addEventListener('click', toggleDeviceImages);
@@ -32,13 +36,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const modelSlug = urlParams.get('model');
     const interfaceName = urlParams.get('interface');
-    
+
     if (modelSlug && interfaceName) {
         // Load device and highlight interface
         loadDeviceAndHighlightInterface(modelSlug, interfaceName);
     } else if (modelSlug) {
         // Load saved model by slug
-        loadModelBySlug(modelSlug);
+        loadDeviceBySlug(modelSlug);
     }
 });
 
@@ -51,13 +55,44 @@ function getHeaders() {
     return headers;
 }
 
-async function loadDeviceTypes() {
+async function loadManufacturers() {
     try {
         const headers = getHeaders();
-        console.log('Fetching device types with headers:', headers);
-        const response = await fetch(`${netboxUrl}/dcim/device-types/?limit=0`, {
+        console.log('Fetching device manufacturers with headers:', headers);
+        const response = await fetch(`${netboxUrl}/dcim/manufacturers/?limit=0`, {
             headers: headers
         });
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const data = await response.json();
+        console.log('Data received:', data);
+        const select = document.getElementById('deviceMfrSelect');
+        select.innerHTML = '<option value="">Select a device manufacturer</option>';
+        if (data.results && data.results.length > 0) {
+            data.results.forEach(dt => {
+                const option = document.createElement('option');
+                option.value = dt.id;
+                option.textContent = dt.name;
+                select.appendChild(option);
+            });
+        } else {
+            select.innerHTML = '<option value="">No device manufacturers found</option>';
+        }
+    } catch (error) {
+        console.error('Error loading device manufacturers:', error);
+        const select = document.getElementById('deviceMfrSelect');
+        select.innerHTML = '<option value="">Error loading device manufacturers</option>';
+    }
+}
+
+async function loadDeviceTypes(manufacturerId) {
+    try {
+        const headers = getHeaders();
+        const deviceManufacturer = manufacturerId || document.getElementById('deviceMfrSelect').value;
+        console.log('Fetching device types with headers:', headers);
+        const response = (deviceManufacturer ? await fetch(`${netboxUrl}/dcim/device-types/?limit=0&manufacturer_id=${deviceManufacturer}`, { headers: headers }) : await fetch(`${netboxUrl}/dcim/device-types/?limit=0`, { headers: headers }));
         console.log('Response status:', response.status);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -112,9 +147,17 @@ async function loadDevice() {
             await loadInterfacesFromNetBox(deviceTypeId, headers);
         }
 
+        // Update page title to show loaded model
+        document.title = `NetBox Device Port Visualizer - ${currentDeviceType.model}`;
+
+        // Append the model slug to the URL
+        const url = new URL(window.location.href);
+        url.searchParams.set('model', currentDeviceType.slug);
+        window.history.pushState({}, '', url);
+
         drawDevice();
         populateHighlightDropdown();
-        
+
         // Load device images as backgrounds if they are currently enabled
         const frontSvg = document.getElementById('frontSvg');
         if (frontSvg.style.backgroundImage && frontSvg.style.backgroundImage !== 'none') {
@@ -125,8 +168,48 @@ async function loadDevice() {
     }
 }
 
+async function loadDeviceByButton() {
+    // Reset the highlighted interface parameter in the address bar
+    const url = new URL(window.location.href);
+    url.searchParams.delete('interface');
+    window.history.pushState({}, '', url);
+
+    await loadDevice();
+}
+
+async function loadDeviceBySlug(slug) {
+    try {
+        const response = await fetch(`api/load-model/${slug}`);
+        if (response.ok) {
+            const modelData = await response.json();
+
+            // Fetch full device type data from NetBox to get u_height and other details
+            const headers = getHeaders();
+            const deviceTypeResponse = await fetch(`${netboxUrl}/dcim/device-types/${modelData.deviceType.id}/`, { headers });
+            deviceType = await deviceTypeResponse.json();
+
+            // Update the manufacturer selector
+            const mfrSelect = document.getElementById('deviceMfrSelect');
+            mfrSelect.value = deviceType.manufacturer.id;
+            await loadDeviceTypes(deviceType.manufacturer.id);
+
+            // Update the device type selector
+            const select = document.getElementById('deviceTypeSelect');
+            select.value = deviceType.id;
+
+            await loadDevice();
+        } else {
+            // Model doesn't exist
+            showModelNotFoundError(slug);
+        }
+    } catch (error) {
+        console.error('Error loading model by slug:', error);
+        showModelNotFoundError(slug);
+    }
+}
+
 async function loadDeviceAndHighlightInterface(deviceSlug, interfaceName) {
-    try {        
+    try {
         // Find the device type with matching slug
         const headers = getHeaders();
         try {
@@ -137,21 +220,27 @@ async function loadDeviceAndHighlightInterface(deviceSlug, interfaceName) {
             console.error(`Error fetching device type with slug '${deviceSlug}':`, error);
             return;
         }
-        
+
+        // Update the manufacturer selector
+        const mfrSelect = document.getElementById('deviceMfrSelect');
+        mfrSelect.value = deviceType.manufacturer.id;
+        await loadDeviceTypes(deviceType.manufacturer.id);
+
         // Set the device type in the selector
         const select = document.getElementById('deviceTypeSelect');
         select.value = deviceType.id;
-        
+
         // Load the device (this will populate interfaces and draw the device)
         await loadDevice();
-        
+
         // Wait a bit for the device to load, then highlight the interface
         setTimeout(() => {
             const selectElement = document.getElementById('highlightSelect');
             selectElement.value = interfaceName;
-            highlightInterface();
+            interfaceHighlightToggle
+();
         }, 500); // Small delay to ensure everything is loaded
-        
+
     } catch (error) {
         console.error('Error loading device and highlighting interface:', error);
     }
@@ -162,20 +251,20 @@ async function loadInterfacesFromNetBox(deviceTypeId, headers) {
     const interfacesData = await interfacesResponse.json();
     interfaces = interfacesData.results;
 
-    
+
     // Now, re-run the query with "mgmt_only" set to true, and extend interfaces with the results
     const mgmtOnlyInterfacesResponse = await fetch(`${netboxUrl}/dcim/interface-templates/?device_type_id=${deviceTypeId}&type__n=virtual&limit=0&mgmt_only=true`, { headers });
     const mgmtOnlyInterfacesData = await mgmtOnlyInterfacesResponse.json();
     interfaces.push(...mgmtOnlyInterfacesData.results);
-    
+
     // Last, grab the console ports
     const consolePortsResponse = await fetch(`${netboxUrl}/dcim/console-port-templates/?device_type_id=${deviceTypeId}`, { headers });
     const consolePortsData = await consolePortsResponse.json();
     interfaces.push(...consolePortsData.results);
 }
 
-// Refresh Interfaces logic
 async function refreshInterfaces() {
+    // Refresh Interfaces logic
     if (!currentDeviceType) return;
     const deviceTypeId = currentDeviceType.id;
     const headers = getHeaders();
@@ -285,7 +374,7 @@ function drawDevice() {
         const posData = positions[iface.id] || getDefaultPosition(iface, svgWidth, svgHeight);
         const side = posData.side || 'front'; // Default to front for backward compatibility
         const svg = side === 'front' ? frontSvg : rearSvg;
-        
+
         // Convert relative positions (0-1) to absolute pixels
         const absolutePos = {
             x: posData.x * svgWidth,
@@ -312,7 +401,7 @@ function getDefaultPosition(iface, svgWidth, svgHeight) {
     // Calculate relative positions (0-1 range)
     const rawRelativeX = margin / svgWidth + (col / cols) * (availableWidth / svgWidth);
     const rawRelativeY = margin / svgHeight + (row / rows) * (availableHeight / svgHeight);
-    
+
     // Snap to grid: X snaps to 0.25% increments, Y snaps to 5% increments
     const relativeX = Math.round(rawRelativeX * 400) / 400; // 0.25% increments
     const relativeY = Math.round(rawRelativeY * 20) / 20; // 5% increments
@@ -329,9 +418,9 @@ function drawInterface(svg, iface, x, y, pixelsPerInch) {
     let shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     let width, height;
     const type = iface.type.value || '';
-    
-    // Use actual physical dimensions scaled by pixels per inch
-    // SFP Types:
+
+    // Use approximate physical dimensions scaled by pixels per inch
+    // Shape Types:
     const sfpTypes = ['10gbase-x-sfpp', '25gbase-x-sfp28', '64gfc-sfpp', '64gfc-sfpdd', '1000base-x-sfp', '10gbase-x-xfp'];
     const qsfpTypes = ['100gbase-x-qsfp28', 'cisco-stackwise'];
     const copperTypes = ['1000base-t', '1000base-tx', '10gbase-t', '100base-tx', 'rj-45'];
@@ -360,10 +449,10 @@ function drawInterface(svg, iface, x, y, pixelsPerInch) {
     g.appendChild(shape);
 
     // Label
-    const label = extractNumeric(iface.name);
+    const label = interfaceNameShortener(iface.name);
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     text.setAttribute('x', x + width/2);
-    text.setAttribute('y', y + height + 10);
+    text.setAttribute('y', y + height/2);
     text.classList.add('text');
     text.textContent = label;
     g.appendChild(text);
@@ -374,22 +463,39 @@ function drawInterface(svg, iface, x, y, pixelsPerInch) {
     svg.appendChild(g);
 }
 
-function extractNumeric(name) {
-    // Extract numeric part from names like 'Et1' or 'GigabitEthernet1/0/1'
-    // Only matches 'Et\d' or 'Gigabit.*' patterns
-    
-    // Match 'Gigabit*' pattern (e.g., GigabitEthernet1/0/1 -> 1/0/1)
-    const gigabitMatch = name.match(/Gigabit[a-zA-Z]*(\d+(?:\/\d+)*)/);
-    if (gigabitMatch) {
-        return gigabitMatch[1];
+function interfaceNameShortener(name) {
+    // Shorten (mostly Cisco) interface names to a more readable format
+
+    // Match 'Ethernet*' pattern (e.g., Ethernet1/0/1 -> Eth1/0/1)
+    if (name.match(/^Ethernet.*/)) {
+        return name.replace(/^[a-zA-Z]+/, 'Eth');
     }
-    
-    // Match 'Et\d' pattern (e.g., Et1 -> 1)
-    const etMatch = name.match(/Et(\d+(?:\/\d+)*)/);
-    if (etMatch) {
-        return etMatch[1];
+
+    // Match 'Gigabit*' pattern (e.g., GigabitEthernet1/0/1 -> Gi1/0/1)
+    if (name.match(/^[Gg]igabit.*/)) {
+        return name.replace(/^[a-zA-Z]+/, 'Gi');
     }
-    
+
+    // Match 'TenGig*' pattern (e.g., TenGigabitEthernet1/0/1 -> Te1/0/1)
+    if (name.match(/^TenGig.*/)) {
+        return name.replace(/^[a-zA-Z]+/, 'Te');
+    }
+
+    // Match 'TwentyFive*' pattern (e.g., TwentyFiveGigabitEthernet1/0/1 -> Twe1/0/1)
+    if (name.match(/^TwentyFive.*/)) {
+        return name.replace(/^[a-zA-Z]+/, 'Twe');
+    }
+
+    // Match 'FortyGig*' pattern (e.g., FortyGigabitEthernet1/0/1 -> Fo1/0/1)
+    if (name.match(/^FortyGig.*/)) {
+        return name.replace(/^[a-zA-Z]+/, 'Fo');
+    }
+
+    // Match 'HundredGig*' pattern (e.g., HundredGigabitEthernet1/0/1 -> Hu1/0/1)
+    if (name.match(/^HundredGig.*/)) {
+        return name.replace(/^[a-zA-Z]+/, 'Hu');
+    }
+
     return name;
 }
 
@@ -408,11 +514,11 @@ function startDrag(event) {
 
 function drag(event) {
     if (!draggedElement) return;
-    
+
     // Find the SVG under the mouse cursor
     const elementAtPoint = document.elementFromPoint(event.clientX, event.clientY);
     const targetSvg = elementAtPoint ? elementAtPoint.closest('svg') : draggedElement.closest('svg');
-    
+
     // If the target SVG is different from the current one, move the element
     const currentSvg = draggedElement.closest('svg');
     if (targetSvg && targetSvg !== currentSvg && (targetSvg.id === 'frontSvg' || targetSvg.id === 'rearSvg')) {
@@ -421,28 +527,28 @@ function drag(event) {
         // Add to target SVG
         targetSvg.appendChild(draggedElement);
     }
-    
+
     const svg = draggedElement.closest('svg');
     const svgRect = svg.getBoundingClientRect();
     const newX = event.clientX - svgRect.left - offset.x;
     const newY = event.clientY - svgRect.top - offset.y;
-    
+
     // Get SVG dimensions for relative calculations
     const svgWidth = parseFloat(svg.getAttribute('width'));
     const svgHeight = parseFloat(svg.getAttribute('height'));
-    
+
     // Convert to relative positions (0-1 range)
     const relativeX = Math.max(0, Math.min(1, newX / svgWidth));
     const relativeY = Math.max(0, Math.min(1, newY / svgHeight));
-    
+
     // Snap to grid: X snaps to 0.25% increments, Y snaps to 5% increments
     const snappedX = Math.round(relativeX * 400) / 400; // 0.25% increments
     const snappedY = Math.round(relativeY * 20) / 20; // 5% increments
-    
+
     // Convert back to absolute pixels
     const snappedAbsX = snappedX * svgWidth;
     const snappedAbsY = snappedY * svgHeight;
-    
+
     const shape = draggedElement.querySelector('rect');
     const text = draggedElement.querySelector('text');
     const width = parseFloat(shape.getAttribute('width'));
@@ -450,7 +556,7 @@ function drag(event) {
     shape.setAttribute('x', snappedAbsX);
     shape.setAttribute('y', snappedAbsY);
     text.setAttribute('x', snappedAbsX + width/2);
-    text.setAttribute('y', snappedAbsY + height + 10);
+    text.setAttribute('y', snappedAbsY + height/2);
 }
 
 function endDrag() {
@@ -459,24 +565,24 @@ function endDrag() {
     const shape = draggedElement.querySelector('rect');
     const svg = draggedElement.closest('svg');
     const svgRect = svg.getBoundingClientRect();
-    
+
     // Get absolute position
     const absoluteX = parseFloat(shape.getAttribute('x'));
     const absoluteY = parseFloat(shape.getAttribute('y'));
-    
+
     // Convert to relative position (0-1 range)
     const svgWidth = parseFloat(svg.getAttribute('width'));
     const svgHeight = parseFloat(svg.getAttribute('height'));
     const relativeX = absoluteX / svgWidth;
     const relativeY = absoluteY / svgHeight;
-    
+
     // Apply the same snapping as in drag function
     const snappedX = Math.round(relativeX * 400) / 400; // 0.25% increments
     const snappedY = Math.round(relativeY * 20) / 20; // 5% increments
-    
+
     // Determine side based on SVG container
     const side = svg.id === 'frontSvg' ? 'front' : 'rear';
-    
+
     positions[id] = {x: snappedX, y: snappedY, side: side};
     // localStorage.setItem(`positions_${currentDeviceType.id}`, JSON.stringify(positions));
     draggedElement = null;
@@ -484,39 +590,34 @@ function endDrag() {
     document.removeEventListener('mouseup', endDrag);
 }
 
-function highlightInterface() {
-    const name = document.getElementById('highlightSelect').value;
-    clearHighlight();
-    if (!name) return; // If no interface selected, just clear highlights
+function interfaceHighlightToggle() {
+    // Highlighting logic
     const elements = document.querySelectorAll('.interface');
+    const name = document.getElementById('highlightSelect').value;
     elements.forEach(el => {
-        if (el.getAttribute('data-name') === name) {
+        if (el.classList.contains('highlighted')) {
+            el.classList.remove('highlighted');
+        } else if (el.getAttribute('data-name') === name) {
             el.classList.add('highlighted');
         }
-    });
-}
-
-function clearHighlight() {
-    document.querySelectorAll('.interface.highlighted').forEach(el => {
-        el.classList.remove('highlighted');
     });
 }
 
 function handleInterfaceClick(event) {
     // Prevent click from triggering if it was part of a drag
     if (draggedElement) return;
-    
+
     const interfaceName = event.currentTarget.getAttribute('data-name');
     const select = document.getElementById('highlightSelect');
     select.value = interfaceName;
-    highlightInterface();
+    interfaceHighlightToggle();
 }
 
 function toggleDeviceImages() {
     const frontSvg = document.getElementById('frontSvg');
     const rearSvg = document.getElementById('rearSvg');
     const button = document.getElementById('toggleImagesButton');
-    
+
     if (frontSvg.style.backgroundImage === '' || frontSvg.style.backgroundImage === 'none') {
         // Show device images as backgrounds
         loadDeviceImagesAsBackgrounds();
@@ -529,19 +630,20 @@ function toggleDeviceImages() {
         rearSvg.style.backgroundSize = '';
         button.textContent = 'Show Device Images';
     }
-    
+
     // Redraw the device to update device body transparency
     if (currentDeviceType) {
         drawDevice();
     }
+    interfaceHighlightToggle(); // Re-highlight the current interface after loading images
 }
 
 function loadDeviceImagesAsBackgrounds() {
     if (!currentDeviceType) return;
-    
+
     const frontSvg = document.getElementById('frontSvg');
     const rearSvg = document.getElementById('rearSvg');
-    
+
     // Load front image as background
     if (currentDeviceType.front_image) {
         let frontImageUrl = currentDeviceType.front_image;
@@ -553,7 +655,7 @@ function loadDeviceImagesAsBackgrounds() {
         frontSvg.style.backgroundRepeat = 'no-repeat';
         frontSvg.style.backgroundPosition = 'center';
     }
-    
+
     // Load rear image as background
     if (currentDeviceType.rear_image) {
         let rearImageUrl = currentDeviceType.rear_image;
@@ -571,7 +673,7 @@ function populateHighlightDropdown() {
     const select = document.getElementById('highlightSelect');
     // Clear existing options except the first one
     select.innerHTML = '<option value="">Select an interface...</option>';
-    
+
     // Add interface names as options
     interfaces.forEach(iface => {
         const option = document.createElement('option');
@@ -627,59 +729,15 @@ function resetLayout() {
 
     // Clear positions for current device type
     positions = {};
-    
-    // Remove from localStorage
-    // localStorage.removeItem(`positions_${currentDeviceType.id}`);
-    
+
     // Redraw the device with default positions
     drawDevice();
-    
+
     // Clear highlight selection
     document.getElementById('highlightSelect').value = '';
     clearHighlight();
-    
+
     alert('Layout has been reset to default positions.');
-}
-
-async function loadModelBySlug(slug) {
-    try {
-        const response = await fetch(`api/load-model/${slug}`);
-        if (response.ok) {
-            const modelData = await response.json();
-            
-            // Fetch full device type data from NetBox to get u_height and other details
-            const headers = getHeaders();
-            const deviceTypeResponse = await fetch(`${netboxUrl}/dcim/device-types/${modelData.deviceType.id}/`, { headers });
-            currentDeviceType = await deviceTypeResponse.json();
-            
-            interfaces = modelData.interfaces || [];
-            positions = modelData.positions || {};
-
-            // Repopulate the interface dropdown
-            populateHighlightDropdown();
-
-            // Update the device type selector
-            const select = document.getElementById('deviceTypeSelect');
-            select.value = currentDeviceType.id;
-
-            drawDevice();
-
-            // Load device images as backgrounds if they are currently enabled
-            const frontSvg = document.getElementById('frontSvg');
-            if (frontSvg.style.backgroundImage && frontSvg.style.backgroundImage !== 'none') {
-                loadDeviceImagesAsBackgrounds();
-            }
-
-            // Update page title to show loaded model
-            document.title = `NetBox Device Port Visualizer - ${currentDeviceType.model}`;
-        } else {
-            // Model doesn't exist
-            showModelNotFoundError(slug);
-        }
-    } catch (error) {
-        console.error('Error loading model by slug:', error);
-        showModelNotFoundError(slug);
-    }
 }
 
 function showModelNotFoundError(slug) {
@@ -692,32 +750,14 @@ function showModelNotFoundError(slug) {
         </div>
     `;
 
-    // Clear the URL parameter
-    const url = new URL(window.location);
-    url.searchParams.delete('model');
+    // Clear all URL parameters
+    const url = new URL(window.location.toString().split('?')[0]);
     window.history.replaceState({}, '', url);
 
     // Redirect after 3 seconds
     setTimeout(async () => {
-        // Load device types and show the interface for creating a new model
-        await loadDeviceTypes();
-        container.innerHTML = `
-            <div style="text-align: center; padding: 50px;">
-                <h2>Create New Model</h2>
-                <p>Select the device type "${slug}" from the dropdown and click "Load Device" to create a model.</p>
-            </div>
-        `;
-        // Try to pre-select the device type if it exists
-        setTimeout(() => {
-            const select = document.getElementById('deviceTypeSelect');
-            const options = Array.from(select.options);
-            const matchingOption = options.find(option => {
-                const text = option.textContent.toLowerCase();
-                return text.includes(slug.toLowerCase()) || option.textContent.includes(slug);
-            });
-            if (matchingOption) {
-                select.value = matchingOption.value;
-            }
-        }, 100);
+        // Reload the main page to reset state
+        window.location.href = url;
+        window.location.reload();
     }, 3000);
 }

@@ -41,7 +41,6 @@ systemctl status deviceportvisualizer.service
 
 ```bash
     location /deviceportvisualizer/ {
-        # Remove these lines if using uWSGI instead of Gunicorn
         proxy_pass http://127.0.0.1:8002;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $http_host;

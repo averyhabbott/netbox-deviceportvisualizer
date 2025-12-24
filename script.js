@@ -38,8 +38,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const interfaceName = urlParams.get('interface');
 
     if (modelSlug && interfaceName) {
-        // Load device and highlight interface
-        loadDeviceAndHighlightInterface(modelSlug, interfaceName);
+        // Load saved model by slug
+        await loadDeviceBySlug(modelSlug);
+        try {
+            // Highlight the specified interface
+            const selectElement = document.getElementById('highlightSelect');
+            selectElement.value = interfaceName;
+            interfaceHighlightToggle();
+        } catch (error) {
+            console.error('Error highlighting interface:', error);
+        }
     } else if (modelSlug) {
         // Load saved model by slug
         loadDeviceBySlug(modelSlug);
@@ -179,70 +187,24 @@ async function loadDeviceByButton() {
 
 async function loadDeviceBySlug(slug) {
     try {
-        const response = await fetch(`api/load-model/${slug}`);
-        if (response.ok) {
-            const modelData = await response.json();
-
-            // Fetch full device type data from NetBox to get u_height and other details
-            const headers = getHeaders();
-            const deviceTypeResponse = await fetch(`${netboxUrl}/dcim/device-types/${modelData.deviceType.id}/`, { headers });
-            deviceType = await deviceTypeResponse.json();
-
-            // Update the manufacturer selector
-            const mfrSelect = document.getElementById('deviceMfrSelect');
-            mfrSelect.value = deviceType.manufacturer.id;
-            await loadDeviceTypes(deviceType.manufacturer.id);
-
-            // Update the device type selector
-            const select = document.getElementById('deviceTypeSelect');
-            select.value = deviceType.id;
-
-            await loadDevice();
-        } else {
-            // Model doesn't exist
-            showModelNotFoundError(slug);
-        }
-    } catch (error) {
-        console.error('Error loading model by slug:', error);
-        showModelNotFoundError(slug);
-    }
-}
-
-async function loadDeviceAndHighlightInterface(deviceSlug, interfaceName) {
-    try {
-        // Find the device type with matching slug
         const headers = getHeaders();
-        try {
-            const deviceTypeResponse = await fetch(`${netboxUrl}/dcim/device-types/?slug=${deviceSlug}`, { headers });
-            const deviceTypeData = await deviceTypeResponse.json();
-            deviceType = deviceTypeData.results[0];
-        } catch (error) {
-            console.error(`Error fetching device type with slug '${deviceSlug}':`, error);
-            return;
-        }
+        const deviceTypeResponse = await fetch(`${netboxUrl}/dcim/device-types/?slug=${slug}`, { headers });
+        const deviceTypeData = await deviceTypeResponse.json();
+        const deviceType = deviceTypeData.results[0];
 
         // Update the manufacturer selector
         const mfrSelect = document.getElementById('deviceMfrSelect');
         mfrSelect.value = deviceType.manufacturer.id;
         await loadDeviceTypes(deviceType.manufacturer.id);
 
-        // Set the device type in the selector
+        // Update the device type selector
         const select = document.getElementById('deviceTypeSelect');
         select.value = deviceType.id;
 
-        // Load the device (this will populate interfaces and draw the device)
         await loadDevice();
-
-        // Wait a bit for the device to load, then highlight the interface
-        setTimeout(() => {
-            const selectElement = document.getElementById('highlightSelect');
-            selectElement.value = interfaceName;
-            interfaceHighlightToggle
-();
-        }, 500); // Small delay to ensure everything is loaded
-
     } catch (error) {
-        console.error('Error loading device and highlighting interface:', error);
+        console.error('Error loading model by slug:', error);
+        showModelNotFoundError(slug);
     }
 }
 
@@ -417,7 +379,8 @@ function drawInterface(svg, iface, x, y, pixelsPerInch) {
 
     let shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     let width, height;
-    const type = iface.type.value || '';
+    // Base size on interface type if defined, else use default
+    const type = (iface.type ? iface.type.value : '');
 
     // Use approximate physical dimensions scaled by pixels per inch
     // Shape Types:
@@ -599,6 +562,10 @@ function interfaceHighlightToggle() {
             el.classList.remove('highlighted');
         } else if (el.getAttribute('data-name') === name) {
             el.classList.add('highlighted');
+            // Update the URL to reflect the highlighted interface
+            const url = new URL(window.location.href);
+            url.searchParams.set('interface', name);
+            window.history.pushState({}, '', url);
         }
     });
 }

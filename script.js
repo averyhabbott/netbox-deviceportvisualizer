@@ -364,9 +364,9 @@ function getDefaultPosition(iface, svgWidth, svgHeight) {
     const rawRelativeX = margin / svgWidth + (col / cols) * (availableWidth / svgWidth);
     const rawRelativeY = margin / svgHeight + (row / rows) * (availableHeight / svgHeight);
 
-    // Snap to grid: X snaps to 0.25% increments, Y snaps to 5% increments
+    // Snap to grid: X snaps to 0.25% increments, Y snaps to 2.5% increments
     const relativeX = Math.round(rawRelativeX * 400) / 400; // 0.25% increments
-    const relativeY = Math.round(rawRelativeY * 20) / 20; // 5% increments
+    const relativeY = Math.round(rawRelativeY * 40) / 40; // 2.5% increments
 
     return {x: relativeX, y: relativeY, side: 'front'}; // Default to front
 }
@@ -504,9 +504,9 @@ function drag(event) {
     const relativeX = Math.max(0, Math.min(1, newX / svgWidth));
     const relativeY = Math.max(0, Math.min(1, newY / svgHeight));
 
-    // Snap to grid: X snaps to 0.25% increments, Y snaps to 5% increments
+    // Snap to grid: X snaps to 0.25% increments, Y snaps to 2.5% increments
     const snappedX = Math.round(relativeX * 400) / 400; // 0.25% increments
-    const snappedY = Math.round(relativeY * 20) / 20; // 5% increments
+    const snappedY = Math.round(relativeY * 40) / 40; // 2.5% increments
 
     // Convert back to absolute pixels
     const snappedAbsX = snappedX * svgWidth;
@@ -541,7 +541,7 @@ function endDrag() {
 
     // Apply the same snapping as in drag function
     const snappedX = Math.round(relativeX * 400) / 400; // 0.25% increments
-    const snappedY = Math.round(relativeY * 20) / 20; // 5% increments
+    const snappedY = Math.round(relativeY * 40) / 40; // 2.5% increments
 
     // Determine side based on SVG container
     const side = svg.id === 'frontSvg' ? 'front' : 'rear';

@@ -385,7 +385,7 @@ function drawInterface(svg, iface, x, y, pixelsPerInch) {
     // Use approximate physical dimensions scaled by pixels per inch
     // Shape Types:
     const sfpTypes = ['10gbase-x-sfpp', '25gbase-x-sfp28', '64gfc-sfpp', '64gfc-sfpdd', '1000base-x-sfp', '10gbase-x-xfp'];
-    const qsfpTypes = ['100gbase-x-qsfp28', 'cisco-stackwise'];
+    const qsfpTypes = ['100gbase-x-qsfp28', 'cisco-stackwise', '400gbase-x-qsfpdd'];
     const copperTypes = ['1000base-t', '1000base-tx', '10gbase-t', '100base-tx', 'rj-45'];
     if (sfpTypes.includes(type)) {
         // SFP cage: 0.53" × 0.33"

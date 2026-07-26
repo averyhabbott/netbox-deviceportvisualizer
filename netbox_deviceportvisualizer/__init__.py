@@ -1,5 +1,7 @@
 from netbox.plugins import PluginConfig
 
+__version__ = '0.2.0'
+
 
 class DevicePortVisualizerConfig(PluginConfig):
     name = 'netbox_deviceportvisualizer'
@@ -8,8 +10,9 @@ class DevicePortVisualizerConfig(PluginConfig):
         "Position DeviceType component templates on front/rear photos, and highlight a "
         "specific port to share as a screenshot."
     )
-    version = '0.1.0'
+    version = __version__
     author = 'Avery Abbott'
+    author_email = 'averyhabbott@yahoo.com'
     base_url = 'device-port-visualizer'
     min_version = '4.5.0'
     max_version = '4.6.99'

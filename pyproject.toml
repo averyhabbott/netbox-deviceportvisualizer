@@ -1,24 +1,50 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "netbox-deviceportvisualizer"
-version = "0.1.0"
-authors = [{name = "Avery Abbott"}]
+dynamic = ["version"]
 description = "Visualize and position NetBox DeviceType component templates on front/rear photos, so a specific port can be highlighted and shared as a screenshot."
 readme = "README.md"
-license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{name = "Avery Abbott", email = "averyhabbott@yahoo.com"}]
+maintainers = [{name = "Avery Abbott", email = "averyhabbott@yahoo.com"}]
+keywords = ["netbox", "netbox-plugin", "dcim", "device-type", "port-mapping", "network-documentation"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
+    "Environment :: Plugins",
+    "Environment :: Web Environment",
     "Framework :: Django",
-    "Intended Audience :: Developers",
+    "Framework :: Django :: 5.2",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: Apache Software License",
-    "Natural Language :: English",
-    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Information Technology",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking",
+    "Topic :: System :: Systems Administration",
 ]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/averyhabbott/netbox-deviceportvisualizer"
+Source = "https://github.com/averyhabbott/netbox-deviceportvisualizer"
+Issues = "https://github.com/averyhabbott/netbox-deviceportvisualizer/issues"
+Changelog = "https://github.com/averyhabbott/netbox-deviceportvisualizer/blob/main/CHANGELOG.md"
+
+[project.entry-points."netbox.plugins"]
+netbox_deviceportvisualizer = "netbox_deviceportvisualizer"
+
+[tool.setuptools.dynamic]
+version = {attr = "netbox_deviceportvisualizer.__version__"}
 
 [tool.setuptools.packages.find]
 include = ["netbox_deviceportvisualizer*"]
+
+[tool.setuptools.package-data]
+netbox_deviceportvisualizer = ["templates/**/*.html", "static/**/*.css", "static/**/*.js"]

@@ -116,4 +116,4 @@ it only exists in this repository under `scripts/`.
 
 ## License
 
-Apache 2.0 — see [LICENSE](LICENSE).
+GPL-3.0-or-later — see [LICENSE](LICENSE).

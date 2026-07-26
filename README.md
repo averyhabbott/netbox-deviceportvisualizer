@@ -1,3 +1,11 @@
+# NetBox Device Port Visualizer (standalone, archived)
+
+> **This standalone Flask/JS tool has been superseded by a NetBox plugin.** It has the same purpose but runs
+> natively inside NetBox instead of as a separate webpage — see the
+> [`netbox-deviceportvisualizer` plugin](https://github.com/averyhabbott/netbox-deviceportvisualizer) (now on
+> `main` of this repo) and [PyPI](https://pypi.org/project/netbox-deviceportvisualizer/). This `standalone`
+> branch is kept only as a historical archive of the original tool and will not receive further updates.
+
 # NetBox Device Port Visualizer
 
 A webpage that displays an interactive visualization of physical interfaces for a given Device Type from NetBox.

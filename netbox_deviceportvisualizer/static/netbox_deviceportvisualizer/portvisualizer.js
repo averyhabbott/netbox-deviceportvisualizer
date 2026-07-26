@@ -43,14 +43,27 @@
     button.addEventListener('click', () => setImageMode(button.dataset.imageMode));
   });
 
+  // Labels on/off is the same kind of client-side-only display preference as Photo/Outline - it never
+  // persists and always starts on "off" (the data-labels-mode the template already renders), since a
+  // device with dozens of ports would otherwise open to a wall of overlapping text.
+  const labelsModeButtons = root.querySelectorAll('.labels-mode-toggle');
+
+  function setLabelsMode(mode) {
+    root.dataset.labelsMode = mode;
+    labelsModeButtons.forEach((button) => button.classList.toggle('active', button.dataset.labelsMode === mode));
+  }
+
+  labelsModeButtons.forEach((button) => {
+    button.addEventListener('click', () => setLabelsMode(button.dataset.labelsMode));
+  });
+
   // Click-to-select: a plain click (as opposed to a drag) never fires dragstart, so this needs no
   // separate guard against an in-progress drag. Delegated on the root so it covers markers created
   // later by handleCreateDrop() too, with no need to attach a handler to each one individually.
+  // A selection can span two elements at once (a marker and its matching row in the component list),
+  // so this clears every currently-selected element, not just the first one found.
   function clearSelection() {
-    const previous = root.querySelector('.dpv-selected');
-    if (previous) {
-      previous.classList.remove('dpv-selected');
-    }
+    root.querySelectorAll('.dpv-selected').forEach((element) => element.classList.remove('dpv-selected'));
   }
 
   root.addEventListener('click', (event) => {
@@ -64,6 +77,31 @@
     if (!alreadySelected) {
       selectable.classList.add('dpv-selected');
     }
+  });
+
+  // Component list: lets you find a component by name and see it picked out on the diagram (switching
+  // face first if it's placed on the other one) instead of having to spot it visually among dozens of
+  // markers. stopPropagation keeps this from also triggering the root click listener above, which
+  // would otherwise treat this as a click on empty space and immediately clear the selection it just made.
+  const componentListItems = root.querySelectorAll('.dpv-component-list-item');
+  componentListItems.forEach((item) => {
+    item.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const target = root.querySelector(
+        `.component-marker[data-content-type="${item.dataset.contentType}"][data-object-id="${item.dataset.objectId}"],`
+        + `.component-marker-chip[data-content-type="${item.dataset.contentType}"][data-object-id="${item.dataset.objectId}"]`
+      );
+      if (!target) {
+        return;
+      }
+      if (item.dataset.face) {
+        showFace(item.dataset.face);
+      }
+      clearSelection();
+      target.classList.add('dpv-selected');
+      item.classList.add('dpv-selected');
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
   });
 
   // If a component was highlighted server-side (via ?highlight=<name>), make sure its face is the
@@ -276,6 +314,21 @@
     exportPngButton.addEventListener('click', exportPng);
   }
 
+  // Mirrors portvisualizer.css's [data-shape="..."] border colors and the base marker fill, so the
+  // exported PNG's un-emphasized markers look like their on-screen counterparts instead of a plain
+  // black outline with no fill.
+  const SHAPE_BORDER_COLORS = {
+    qsfp: '#6f42c1',
+    sfp: '#0d6efd',
+    copper: '#198754',
+    console: '#fd7e14',
+    power: '#dc3545',
+    'patch-fiber': '#0dcaf0',
+    'patch-copper': '#20c997',
+  };
+  const DEFAULT_BORDER_COLOR = 'rgba(0, 0, 0, 0.6)';
+  const BASE_FILL_COLOR = 'rgba(255, 255, 255, 0.55)';
+
   function exportPng() {
     const activePanel = root.querySelector('.dpv-face-panel:not(.d-none)');
     if (!activePanel) {
@@ -294,18 +347,55 @@
         const y = (parseFloat(marker.style.top) / 100) * canvas.height;
         const w = (parseFloat(marker.style.width) / 100) * canvas.width;
         const h = (parseFloat(marker.style.height) / 100) * canvas.height;
-        const emphasized = marker.classList.contains('dpv-highlighted') || marker.classList.contains('dpv-selected');
-        const color = marker.classList.contains('dpv-highlighted') ? '#ffc107' : '#000000';
-        ctx.strokeStyle = color;
+        // Match the on-screen appearance as closely as a static image can: every marker gets the same
+        // translucent fill and shape-colored border it has on the diagram, and a highlighted/selected
+        // one swaps to its own solid-ish color, same as SHAPE_BORDER_COLORS/CSS below.
+        const highlighted = marker.classList.contains('dpv-highlighted');
+        const selected = marker.classList.contains('dpv-selected');
+        const emphasized = highlighted || selected;
+
+        let borderColor = SHAPE_BORDER_COLORS[marker.dataset.shape] || DEFAULT_BORDER_COLOR;
+        let fillColor = BASE_FILL_COLOR;
+        if (highlighted) {
+          borderColor = '#ff9800';
+          fillColor = 'rgba(255, 152, 0, 0.6)';
+        } else if (selected) {
+          borderColor = '#0dcaf0';
+          fillColor = 'rgba(13, 202, 240, 0.6)';
+        }
+
+        ctx.fillStyle = fillColor;
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = borderColor;
         ctx.lineWidth = Math.max(2, canvas.width / 400);
         ctx.strokeRect(x, y, w, h);
+
         // Only label the marker(s) the export is actually meant to call out - drawing every marker's
         // name onto a photo with dozens of ports produces the same unreadable clutter the on-screen
-        // diagram had before it moved to hover/select-revealed labels.
+        // diagram had before it moved to hover/select-revealed labels. Pulled from the label span's own
+        // text (the server-computed short name), not the marker's full name, to match what's on screen.
         if (emphasized) {
-          ctx.fillStyle = color;
-          ctx.font = `${Math.max(10, canvas.width / 100)}px sans-serif`;
-          ctx.fillText(marker.dataset.name || '', x, Math.max(10, y - 4));
+          const labelSpan = marker.querySelector('.component-marker-label');
+          const text = (labelSpan ? labelSpan.textContent : marker.dataset.name || '').trim();
+          const fontSize = Math.max(12, canvas.width / 90);
+          const paddingX = fontSize * 0.4;
+          const paddingY = fontSize * 0.25;
+          const centerX = x + w / 2;
+          const centerY = y + h / 2;
+
+          ctx.font = `600 ${fontSize}px sans-serif`;
+          const textWidth = ctx.measureText(text).width;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+          ctx.fillRect(
+            centerX - textWidth / 2 - paddingX,
+            centerY - fontSize / 2 - paddingY,
+            textWidth + paddingX * 2,
+            fontSize + paddingY * 2
+          );
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, centerX, centerY);
         }
       });
 

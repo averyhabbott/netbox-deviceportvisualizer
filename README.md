@@ -101,6 +101,19 @@ On import, each entry is matched by name against the target DeviceType's live co
 - A live component with no entry in the file is left unplaced — never auto-filled to a guessed position, since
   the entire point of this plugin is that a placed marker can be trusted.
 
+### Migrating from the standalone tool
+
+If you have layouts saved by the old standalone (non-plugin) version of this tool, convert one to this
+plugin's import format with:
+
+```bash
+python scripts/migrate_from_standalone.py old_layout.json -o new_layout.json
+```
+
+Then upload `new_layout.json` via **Import Layout** on the matching DeviceType, same as any other export.
+This script isn't installed with the plugin — it's a one-time migration aid, not an ongoing feature, so
+it only exists in this repository under `scripts/`.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).

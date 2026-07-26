@@ -18,6 +18,7 @@
     data-import-url="{% url 'dcim:devicetype_port_visualizer_import' pk=object.pk %}"
     data-snap-x="{{ snap_x }}"
     data-snap-y="{{ snap_y }}"
+    data-labels-mode="hover"
   >
     {% csrf_token %}
 
@@ -30,6 +31,11 @@
         <div class="btn-group" role="group" aria-label="{% trans 'Image' %}">
           <button type="button" class="btn btn-outline-secondary image-mode-toggle active" data-image-mode="photo">{% trans "Photo" %}</button>
           <button type="button" class="btn btn-outline-secondary image-mode-toggle" data-image-mode="outline">{% trans "Outline" %}</button>
+        </div>
+        <div class="btn-group" role="group" aria-label="{% trans 'Labels' %}">
+          <button type="button" class="btn btn-outline-secondary labels-mode-toggle" data-labels-mode="on">{% trans "Labels On" %}</button>
+          <button type="button" class="btn btn-outline-secondary labels-mode-toggle active" data-labels-mode="hover">{% trans "Hover" %}</button>
+          <button type="button" class="btn btn-outline-secondary labels-mode-toggle" data-labels-mode="off">{% trans "Off" %}</button>
         </div>
       </div>
       <div class="btn-list">
@@ -51,7 +57,7 @@
     </div>
 
     <div class="row">
-      <div class="{% if can_edit %}col-md-9{% else %}col-md-12{% endif %}">
+      <div class="col-md-9">
         {% for face, image_url in faces %}
           <div class="dpv-face-panel{% if face != 'front' %} d-none{% endif %}" data-face="{{ face }}" data-image-mode="photo"
                {% if not image_url %}style="aspect-ratio: {{ aspect_width }} / {{ aspect_height|floatformat:2 }};"{% endif %}>
@@ -89,8 +95,28 @@
         {% endif %}
       </div>
 
-      {% if can_edit %}
-        <div class="col-md-3">
+      <div class="col-md-3">
+        <div class="card mb-3">
+          <h5 class="card-header">{% trans "Components" %}</h5>
+          <div class="list-group list-group-flush dpv-component-list">
+            {% for item in placed %}
+              <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center dpv-component-list-item"
+                      data-content-type="{{ item.content_type }}" data-object-id="{{ item.object_id }}" data-face="{{ item.face }}">
+                {{ item.short_name }}
+                <span class="badge bg-secondary-lt text-uppercase">{{ item.face }}</span>
+              </button>
+            {% endfor %}
+            {% for item in unplaced %}
+              <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center dpv-component-list-item text-muted"
+                      data-content-type="{{ item.content_type }}" data-object-id="{{ item.object_id }}">
+                {{ item.short_name }}
+                <span class="badge bg-secondary-lt">{% trans "Unplaced" %}</span>
+              </button>
+            {% endfor %}
+          </div>
+        </div>
+
+        {% if can_edit %}
           <div class="card">
             <h5 class="card-header">{% trans "Unplaced Components" %}</h5>
             <div class="card-body dpv-unplaced-tray" id="dpv-unplaced-tray">
@@ -108,8 +134,8 @@
               {% endfor %}
             </div>
           </div>
-        </div>
-      {% endif %}
+        {% endif %}
+      </div>
     </div>
   </div>
 {% endblock %}

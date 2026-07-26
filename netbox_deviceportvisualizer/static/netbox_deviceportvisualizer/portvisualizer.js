@@ -124,6 +124,8 @@
   const pendingUpdates = new Map();
   // Components dragged out of the tray this session, not yet saved: contentType|objectId -> {..., x, y, face}.
   const pendingCreates = new Map();
+  // Existing, already-saved positions the user has dragged back to the tray (or cleared): positionId set.
+  const pendingDeletes = new Set();
 
   function markDirty() {
     if (saveButton) {
@@ -158,7 +160,9 @@
 
   root.querySelectorAll('.component-marker').forEach(attachMarkerDragHandlers);
 
-  root.querySelectorAll('.component-marker-chip').forEach((chip) => {
+  // Factored out so a chip created dynamically (by unplaceMarker(), below) gets the same drag-to-place
+  // behavior as one rendered server-side, without duplicating the dragstart payload logic.
+  function attachChipDragHandlers(chip) {
     chip.addEventListener('dragstart', (event) => {
       event.dataTransfer.setData('application/json', JSON.stringify({
         kind: 'create',
@@ -169,7 +173,95 @@
         height: parseFloat(chip.dataset.height),
       }));
     });
-  });
+  }
+
+  root.querySelectorAll('.component-marker-chip').forEach(attachChipDragHandlers);
+
+  function createChipElement(data) {
+    const chip = document.createElement('div');
+    chip.className = 'component-marker-chip';
+    chip.draggable = true;
+    chip.dataset.shape = data.shape;
+    chip.dataset.contentType = data.contentType;
+    chip.dataset.objectId = data.objectId;
+    chip.dataset.name = data.name;
+    chip.dataset.width = data.width;
+    chip.dataset.height = data.height;
+    chip.textContent = data.shortName;
+    attachChipDragHandlers(chip);
+    return chip;
+  }
+
+  // The tray shows "Every component has been placed." only when it was empty at page load - once
+  // unplaceMarker() below is about to add a chip back to it, that placeholder text no longer applies.
+  function unplacedTrayElement() {
+    const tray = document.getElementById('dpv-unplaced-tray');
+    if (tray) {
+      const placeholder = tray.querySelector('p');
+      if (placeholder) {
+        placeholder.remove();
+      }
+    }
+    return tray;
+  }
+
+  // Mirrors the sidebar Components list row for a component that's just been unplaced, so it reads
+  // "Unplaced" immediately instead of staying stale (and click-selectable-but-silently-broken, since
+  // its matching marker no longer exists in the DOM) until the next Save reloads the page.
+  function syncListRowToUnplaced(contentType, objectId) {
+    const row = root.querySelector(
+      `.dpv-component-list-item[data-content-type="${contentType}"][data-object-id="${objectId}"]`
+    );
+    if (!row) {
+      return;
+    }
+    row.classList.add('text-muted');
+    row.classList.remove('dpv-selected');
+    row.removeAttribute('data-face');
+    const badge = row.querySelector('.badge');
+    if (badge) {
+      badge.classList.remove('text-uppercase');
+      badge.textContent = 'Unplaced';
+    }
+  }
+
+  // Un-place: removes the marker from the diagram and returns its chip to the tray, staged exactly
+  // like a move or a create - nothing hits the server until Save. A marker with a positionId is an
+  // existing saved position, queued for deletion on Save (and dropped from pendingUpdates, since
+  // there's no point PATCHing a position that's about to be deleted). A marker with no positionId was
+  // itself an unsaved pendingCreate from earlier this session, so unplacing it is a pure client-side
+  // no-op against the server - just discard the pending create.
+  function unplaceMarker(marker) {
+    const contentType = marker.dataset.contentType;
+    const objectId = marker.dataset.objectId;
+    const key = componentKey(contentType, objectId);
+    const positionId = marker.dataset.positionId;
+
+    if (positionId) {
+      pendingDeletes.add(positionId);
+      pendingUpdates.delete(positionId);
+    } else {
+      pendingCreates.delete(key);
+    }
+
+    const labelSpan = marker.querySelector('.component-marker-label');
+    const tray = unplacedTrayElement();
+    if (tray) {
+      tray.appendChild(createChipElement({
+        shape: marker.dataset.shape,
+        contentType,
+        objectId,
+        name: marker.dataset.name,
+        shortName: labelSpan ? labelSpan.textContent : marker.dataset.name,
+        width: parseFloat(marker.style.width),
+        height: parseFloat(marker.style.height),
+      }));
+    }
+
+    marker.remove();
+    syncListRowToUnplaced(contentType, objectId);
+    markDirty();
+  }
 
   function handleMoveDrop(payload, panel, rect, event) {
     const marker = root.querySelector(
@@ -262,6 +354,50 @@
     });
   });
 
+  // Dropping an already-placed marker back onto the tray un-places it. Which action a drop triggers
+  // (move vs. unplace) is determined entirely by which element it lands on - this reuses the same
+  // 'move' dragstart payload markers already send, no new payload shape needed.
+  const unplacedTray = document.getElementById('dpv-unplaced-tray');
+  if (unplacedTray) {
+    unplacedTray.addEventListener('dragover', (event) => event.preventDefault());
+    unplacedTray.addEventListener('drop', (event) => {
+      event.preventDefault();
+      const raw = event.dataTransfer.getData('application/json');
+      if (!raw) {
+        return;
+      }
+      const payload = JSON.parse(raw);
+      if (payload.kind !== 'move') {
+        return;
+      }
+      const marker = root.querySelector(
+        `.component-marker[data-content-type="${payload.contentType}"][data-object-id="${payload.objectId}"]`
+      );
+      if (marker) {
+        unplaceMarker(marker);
+      }
+    });
+  }
+
+  const clearModelButton = document.getElementById('dpv-clear-model');
+  if (clearModelButton) {
+    // Staged like every other change here - Clear Model queues a delete for everything currently
+    // placed, same as dragging each one to the tray individually, and still waits for Save to actually
+    // hit the server. The confirm() is the one exception to "no interruptions until Save": clearing
+    // every placement on the device at once is a large enough blast radius to deserve a speed bump,
+    // even though it's still undoable by simply not saving.
+    clearModelButton.addEventListener('click', () => {
+      const placedMarkers = Array.from(root.querySelectorAll('.component-marker'));
+      if (!placedMarkers.length) {
+        return;
+      }
+      if (!window.confirm('Remove every placed component from this diagram? This cannot be undone once saved.')) {
+        return;
+      }
+      placedMarkers.forEach(unplaceMarker);
+    });
+  }
+
   async function save() {
     saveButton.disabled = true;
     const headers = { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken };
@@ -280,8 +416,15 @@
       x: item.x,
       y: item.y,
     }));
+    const deletes = Array.from(pendingDeletes).map((positionId) => ({ id: Number(positionId) }));
 
     try {
+      if (deletes.length) {
+        const response = await fetch(apiUrl, { method: 'DELETE', headers, body: JSON.stringify(deletes) });
+        if (!response.ok) {
+          throw new Error(`Failed to remove unplaced positions (${response.status}).`);
+        }
+      }
       if (updates.length) {
         const response = await fetch(apiUrl, { method: 'PATCH', headers, body: JSON.stringify(updates) });
         if (!response.ok) {
@@ -328,6 +471,11 @@
   };
   const DEFAULT_BORDER_COLOR = 'rgba(0, 0, 0, 0.6)';
   const BASE_FILL_COLOR = 'rgba(255, 255, 255, 0.55)';
+  // A fixed target, not a minimum: this deliberately downscales an already-large source photo (keeping
+  // exported file size predictable) just as much as it upscales a small one. Upscaling can't add detail
+  // to the photo itself - it'll look softer the more it's stretched - but every marker box/label is
+  // drawn fresh at the canvas's own resolution, so those come out crisp regardless of the source photo.
+  const TARGET_EXPORT_WIDTH = 1500;
 
   function exportPng() {
     const activePanel = root.querySelector('.dpv-face-panel:not(.d-none)');
@@ -336,9 +484,12 @@
     }
     const img = activePanel.querySelector('.dpv-photo');
     const rect = activePanel.getBoundingClientRect();
+    const baseWidth = img ? img.naturalWidth : rect.width;
+    const baseHeight = img ? img.naturalHeight : rect.height;
+    const scale = TARGET_EXPORT_WIDTH / baseWidth;
     const canvas = document.createElement('canvas');
-    canvas.width = img ? img.naturalWidth : Math.round(rect.width);
-    canvas.height = img ? img.naturalHeight : Math.round(rect.height);
+    canvas.width = TARGET_EXPORT_WIDTH;
+    canvas.height = Math.round(baseHeight * scale);
     const ctx = canvas.getContext('2d');
 
     const drawMarkersAndDownload = () => {
@@ -366,9 +517,22 @@
 
         ctx.fillStyle = fillColor;
         ctx.fillRect(x, y, w, h);
+
+        // The live CSS's box-shadow glow (the resting frame of the pulse animation - a still image
+        // obviously can't pulse) is what actually makes a highlighted/selected port "pop"; the fill/
+        // border colors alone already matched CSS before this, so a flat strokeRect without a shadow
+        // read as noticeably weaker than the on-screen version despite the identical colors.
+        if (emphasized) {
+          ctx.save();
+          ctx.shadowColor = borderColor;
+          ctx.shadowBlur = canvas.width / 75;
+        }
         ctx.strokeStyle = borderColor;
         ctx.lineWidth = Math.max(2, canvas.width / 400);
         ctx.strokeRect(x, y, w, h);
+        if (emphasized) {
+          ctx.restore();
+        }
 
         // Only label the marker(s) the export is actually meant to call out - drawing every marker's
         // name onto a photo with dozens of ports produces the same unreadable clutter the on-screen

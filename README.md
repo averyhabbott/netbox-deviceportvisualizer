@@ -104,15 +104,41 @@ On import, each entry is matched by name against the target DeviceType's live co
 ### Migrating from the standalone tool
 
 If you have layouts saved by the old standalone (non-plugin) version of this tool, convert one to this
-plugin's import format with:
+plugin's import format with the `migrate_from_standalone.py` script.
+
+**Getting the script.** It's a one-time migration aid, not an ongoing feature, so it is **not** included
+in the `pip install netbox-deviceportvisualizer` package — `pyproject.toml` only ships the
+`netbox_deviceportvisualizer` package itself. Download just the one file from GitHub:
 
 ```bash
-python scripts/migrate_from_standalone.py old_layout.json -o new_layout.json
+curl -O https://raw.githubusercontent.com/averyhabbott/netbox-deviceportvisualizer/main/scripts/migrate_from_standalone.py
 ```
 
-Then upload `new_layout.json` via **Import Layout** on the matching DeviceType, same as any other export.
-This script isn't installed with the plugin — it's a one-time migration aid, not an ongoing feature, so
-it only exists in this repository under `scripts/`.
+(or clone the full repo and use `scripts/migrate_from_standalone.py` from your checkout).
+
+**Where to run it.** Anywhere with Python 3 — it does not need to run on the NetBox server itself. The
+script only reads a JSON file and writes a JSON file; it has no dependencies beyond the standard library
+and never imports Django, talks to NetBox's API, or touches the network. Run it on your own laptop against
+an old layout export:
+
+```bash
+python3 migrate_from_standalone.py old_layout.json -o new_layout.json
+```
+
+Then upload `new_layout.json` via **Import Layout** on the matching DeviceType in your browser, same as
+any other export — that upload step is what actually talks to NetBox, from wherever your browser happens
+to be.
+
+**Other considerations:**
+
+- The old tool keyed each position by the component's numeric database ID at the time it was saved. If a
+  DeviceType's templates were ever deleted and recreated (e.g. re-imported from the device-type library),
+  those old IDs no longer correspond to anything — the script drops those entries and reports each one as
+  a `warning:` line on stderr rather than guessing. This is expected and doesn't affect any component that
+  still exists under its original ID; check the warning count if you want to know how many entries were
+  dropped.
+- Only interfaces and console ports were ever positioned by the old tool — it never fetched power ports,
+  power outlets, or front/rear ports from NetBox, so those won't appear in old exports at all.
 
 ## License
 

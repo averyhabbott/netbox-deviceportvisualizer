@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-deviceportvisualizer"
+version = "0.1.0"
+authors = [{name = "Avery Abbott"}]
+description = "Visualize and position NetBox DeviceType component templates on front/rear photos, so a specific port can be highlighted and shared as a screenshot."
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[tool.setuptools.packages.find]
+include = ["netbox_deviceportvisualizer*"]

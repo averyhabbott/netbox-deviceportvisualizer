@@ -1,0 +1,6 @@
+{% load i18n %}
+{% if object.device_type_id %}
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'dcim:devicetype_port_visualizer' pk=object.device_type_id %}">
+    <i class="mdi mdi-image-search-outline"></i> {% trans "Port Visualizer" %}
+  </a>
+{% endif %}

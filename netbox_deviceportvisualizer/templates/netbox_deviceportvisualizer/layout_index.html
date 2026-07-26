@@ -1,0 +1,36 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Port Visualizer Layouts" %}{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <h5 class="card-header">{% trans "Device Types With a Saved Layout" %}</h5>
+    <table class="table table-hover">
+      <thead>
+        <tr>
+          <th>{% trans "Manufacturer" %}</th>
+          <th>{% trans "Model" %}</th>
+          <th>{% trans "Positioned Components" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device_type in device_types %}
+          <tr>
+            <td>{{ device_type.manufacturer }}</td>
+            <td>
+              <a href="{% url 'dcim:devicetype_port_visualizer' pk=device_type.pk %}">{{ device_type }}</a>
+            </td>
+            <td>{{ device_type.position_count }}</td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="3" class="text-muted">
+              {% trans "No device type has a saved layout yet." %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endblock %}

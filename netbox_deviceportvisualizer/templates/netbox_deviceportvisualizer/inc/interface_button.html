@@ -1,0 +1,5 @@
+{% load i18n %}
+<a class="btn btn-sm btn-outline-secondary"
+   href="{% url 'dcim:devicetype_port_visualizer' pk=object.device.device_type_id %}?highlight={{ object.name|urlencode }}">
+  <i class="mdi mdi-image-search-outline"></i> {% trans "Locate on Diagram" %}
+</a>

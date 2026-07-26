@@ -1,0 +1,28 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+{% load form_helpers %}
+
+{% block content %}
+  <div class="card">
+    <h5 class="card-header">{% trans "Import Layout" %}</h5>
+    <div class="card-body">
+      <p>
+        {% blocktrans %}
+          Upload a layout file previously downloaded via Export Layout, from this or another NetBox instance.
+          Each entry is matched against this device type's current components by name; unmatched entries are
+          skipped and reported below, and any component with no matching entry is simply left unplaced.
+        {% endblocktrans %}
+      </p>
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% render_form form %}
+        <div class="btn-list mt-3">
+          <button type="submit" class="btn btn-primary">{% trans "Import" %}</button>
+          <a class="btn btn-outline-secondary" href="{% url 'dcim:devicetype_port_visualizer' pk=object.pk %}">
+            {% trans "Cancel" %}
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
